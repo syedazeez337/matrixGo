@@ -51,24 +51,22 @@ func (t *TerminalState) Resize() error {
 }
 
 // UpdateGrid updates the grid with falling characters
-func (t *TerminalState) UpdateGrid() {
-	for row := t.Rows - 1; row >= 0; row-- {
-		for col := 0; col < t.Cols; col++ {
-			index := row*t.Cols + col
+func (t *TerminalState) UpdateGrid(rng *rand.Rand) {
+    for row := t.Rows - 1; row >= 0; row-- {
+        for col := 0; col < t.Cols; col++ {
+            index := row*t.Cols + col
 
-			// Handle falling characters
-			if row < t.Rows-1 && t.Grid[index] != ' ' {
-				below := (row+1)*t.Cols + col
-				t.Grid[below] = t.Grid[index]
-				t.Grid[index] = ' '
-			}
+            if row < t.Rows-1 && t.Grid[index] != ' ' {
+                below := (row+1)*t.Cols + col
+                t.Grid[below] = t.Grid[index]
+                t.Grid[index] = ' '
+            }
 
-			// Generate new characters at the top row
-			if row == 0 && rand.Intn(10) < 2 { // 20% chance of new char
-				t.Grid[index] = getRandomChar()
-			}
-		}
-	}
+            if row == 0 && rng.Intn(10) < 2 {
+                t.Grid[index] = getRandomChar(rng)
+            }
+        }
+    }
 }
 
 // RenderGrid draws the grid to the terminal
@@ -88,9 +86,9 @@ func (t *TerminalState) RenderGrid() {
 }
 
 // getRandomChar generates a random character
-func getRandomChar() rune {
-	chars := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	return rune(chars[rand.Intn(len(chars))])
+func getRandomChar(rng *rand.Rand) rune {
+    chars := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    return rune(chars[rng.Intn(len(chars))])
 }
 
 // ClearScreen clears the terminal
@@ -108,41 +106,35 @@ func HandleExit() {
 }
 
 func main() {
-	rand.Seed(time.Now().UnixNano())
+    rng := rand.New(rand.NewSource(time.Now().UnixNano())) // Local random generator
 
-	// Initialize terminal state
-	state, err := InitializeTerminal()
-	if err != nil {
-		fmt.Println("Error initializing terminal:", err)
-		return
-	}
-	defer HandleExit()
+    state, err := InitializeTerminal()
+    if err != nil {
+        fmt.Println("Error initializing terminal:", err)
+        return
+    }
+    defer HandleExit()
 
-	// Hide cursor and clear screen
-	fmt.Print("\033[?25l")
-	ClearScreen()
+    fmt.Print("\033[?25l")
+    ClearScreen()
 
-	// Signal handling for graceful exit
-	sigs := make(chan os.Signal, 1)
-	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-	go func() {
-		<-sigs
-		HandleExit()
-	}()
+    sigs := make(chan os.Signal, 1)
+    signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+    go func() {
+        <-sigs
+        HandleExit()
+    }()
 
-	// Main loop
-	ticker := time.NewTicker(66 * time.Millisecond) // ~15 FPS
-	defer ticker.Stop()
+    ticker := time.NewTicker(66 * time.Millisecond)
+    defer ticker.Stop()
 
-	for range ticker.C {
-		// Resize terminal if necessary
-		if err := state.Resize(); err != nil {
-			fmt.Println("Error resizing terminal:", err)
-			break
-		}
+    for range ticker.C {
+        if err := state.Resize(); err != nil {
+            fmt.Println("Error resizing terminal:", err)
+            break
+        }
 
-		// Update and render the grid
-		state.UpdateGrid()
-		state.RenderGrid()
-	}
+        state.UpdateGrid(rng)
+        state.RenderGrid()
+    }
 }
